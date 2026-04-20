@@ -25,26 +25,43 @@ from matplotlib import font_manager as fm
 
 def pick_chinese_font():
     cand = [
-        'Microsoft YaHei', 'SimHei', 'SimSun', 'KaiTi',
-        'Noto Sans CJK SC', 'Source Han Sans SC',
-        'WenQuanYi Micro Hei', 'Arial Unicode MS'
+        'Microsoft YaHei',
+        'SimHei',
+        'SimSun',
+        'KaiTi',
+        'Noto Sans CJK SC',
+        'Source Han Sans SC',
+        'WenQuanYi Micro Hei',
+        'Arial Unicode MS'
     ]
     for f in cand:
         try:
             path = fm.findfont(f, fallback_to_default=False)
             if path and ('DejaVuSans' not in path):
-                return f
+                return f, path
         except Exception:
             continue
-    return 'SimHei'   # Windows 下优先兜底
+    # 若系统里上述字体都没有，则退回 matplotlib 默认找到的 sans-serif
+    path = fm.findfont(fm.FontProperties(family='sans-serif'))
+    return None, path
 
-CN_FONT = pick_chinese_font()
+CN_FONT, CN_FONT_PATH = pick_chinese_font()
+CN_FONT_PROP = fm.FontProperties(fname=CN_FONT_PATH)
 
-mpl.rcParams['font.family'] = 'sans-serif'
-mpl.rcParams['font.sans-serif'] = [CN_FONT, 'Microsoft YaHei', 'SimHei', 'SimSun', 'DejaVu Sans']
+# 先设样式，再覆盖 rcParams，避免样式把中文字体重新改掉
+plt.style.use('seaborn-v0_8-white')
+
+mpl.rcParams['font.family'] = CN_FONT_PROP.get_name()
+mpl.rcParams['font.sans-serif'] = [
+    CN_FONT_PROP.get_name(),
+    'Microsoft YaHei',
+    'SimHei',
+    'SimSun',
+    'Noto Sans CJK SC',
+    'Source Han Sans SC',
+    'Arial Unicode MS'
+]
 mpl.rcParams['axes.unicode_minus'] = False
-mpl.rcParams['pdf.fonttype'] = 42
-mpl.rcParams['ps.fonttype'] = 42
 mpl.rcParams['svg.fonttype'] = 'none'
 mpl.rcParams['mathtext.fontset'] = 'stix'
 mpl.rcParams['mathtext.default'] = 'regular'
@@ -60,8 +77,6 @@ mpl.rcParams['grid.linewidth'] = 0.5
 mpl.rcParams['legend.frameon'] = True
 mpl.rcParams['legend.framealpha'] = 0.95
 mpl.rcParams['legend.edgecolor'] = '#666666'
-
-plt.style.use('seaborn-v0_8-white')
 
 COLORS_CLUST = ['#4C72B0', '#C44E52', '#55A868', '#8172B3', '#64B5CD']
 colors_s = ['#4C72B0', '#DD8452', '#55A868']
@@ -425,7 +440,6 @@ ax.legend(fontsize=9)
 plt.suptitle('问题三（A）：Pareto 前沿与多目标权衡结果', fontsize=14, fontweight='bold')
 plt.tight_layout(rect=[0, 0, 1, 0.97])
 plt.savefig(f'{FIG_DIR}/p3_01_pareto.png', dpi=300, bbox_inches='tight')
-plt.savefig(f'{FIG_DIR}/p3_01_pareto.pdf', bbox_inches='tight')
 plt.close()
 print('\n✓ 保存图: p3_01_pareto.png')
 
@@ -528,7 +542,6 @@ ax.grid(True, linestyle='--', alpha=0.35)
 plt.suptitle('问题三（B）：蒙特卡罗鲁棒性分析结果', fontsize=14, fontweight='bold')
 plt.tight_layout(rect=[0, 0, 1, 0.97])
 plt.savefig(f'{FIG_DIR}/p3_02_robust.png', dpi=300, bbox_inches='tight')
-plt.savefig(f'{FIG_DIR}/p3_02_robust.pdf', bbox_inches='tight')
 plt.close()
 print('✓ 保存图: p3_02_robust.png')
 
@@ -611,9 +624,10 @@ table.scale(1.08, 1.55)
 for (r, c), cell in table.get_celld().items():
     cell.set_linewidth(0.4)
     cell.set_edgecolor('#666666')
+    cell.get_text().set_fontproperties(CN_FONT_PROP)
     if r == 0:
         cell.set_facecolor('#D9E2F3')
-        cell.set_text_props(weight='bold')
+        cell.set_text_props(weight='bold', fontproperties=CN_FONT_PROP)
     else:
         cell.set_facecolor('white')
 
@@ -622,6 +636,5 @@ ax.set_title('（d）各聚类对应的模板方案', fontsize=11, pad=10)
 plt.suptitle('问题三（C）：患者分型与模板方案结果', fontsize=14, fontweight='bold')
 plt.tight_layout(rect=[0, 0, 1, 0.97])
 plt.savefig(f'{FIG_DIR}/p3_03_cluster.png', dpi=300, bbox_inches='tight')
-plt.savefig(f'{FIG_DIR}/p3_03_cluster.pdf', bbox_inches='tight')
 plt.close()
 print('✓ 保存图: p3_03_cluster.png')
