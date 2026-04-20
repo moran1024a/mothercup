@@ -916,125 +916,192 @@ save_fig(fig, os.path.join(FIG_DIR, 'p2_final_02_calibration_dca.png'))
 print('✓ 保存图: p2_final_02_calibration_dca.png')
 
 # =========================
-# 14. 图3：痰湿亚组分析
+# 14. 图3：痰湿亚组分析（重绘版） + 图4：决策树完整展开
 # =========================
-fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-fig.subplots_adjust(wspace=0.26, hspace=0.30)
 
-# (a) 痰湿 × 血脂异常 热力图
-ax = axes[0, 0]
+# 为后续图使用统一分段
 df['_痰湿分段'] = pd.cut(
     df[COL['TANSHI']],
     bins=[-1, 20, 40, 60, 80, 101],
     labels=['0–20', '20–40', '40–60', '60–80', '80–100']
 )
-piv = df.pivot_table(
+
+df['_活动分段'] = pd.cut(
+    df[COL['ACT']],
+    bins=[-1, 40, 60, 101],
+    labels=['低活动(<40)', '中活动(40–60)', '高活动(≥60)']
+)
+
+# -------------------------
+# 图3：四个更紧凑、可读性更强的子图
+# -------------------------
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+fig.subplots_adjust(wspace=0.26, hspace=0.32)
+
+# (a) 痰湿 × 血脂异常 热力图（增强标注）
+ax = axes[0, 0]
+piv_rate = df.pivot_table(
     index='异常项数',
     columns='_痰湿分段',
     values=COL['TARGET'],
     aggfunc='mean',
     observed=True
 )
+piv_cnt = df.pivot_table(
+    index='异常项数',
+    columns='_痰湿分段',
+    values=COL['TARGET'],
+    aggfunc='count',
+    observed=True
+)
 
-im = ax.imshow(piv.values, cmap='YlOrRd', aspect='auto', vmin=0, vmax=1)
-for i in range(piv.shape[0]):
-    for j in range(piv.shape[1]):
-        v = piv.values[i, j]
+im = ax.imshow(piv_rate.values, cmap='YlOrRd', aspect='auto', vmin=0, vmax=1)
+for i in range(piv_rate.shape[0]):
+    for j in range(piv_rate.shape[1]):
+        v = piv_rate.values[i, j]
+        n = piv_cnt.values[i, j]
         if pd.notna(v):
             color = 'white' if v > 0.5 else 'black'
-            ax.text(j, i, f'{v:.2f}', ha='center', va='center', color=color, fontsize=9,
-                    fontproperties=CN_FONT)
-ax.set_xticks(range(piv.shape[1]))
-ax.set_xticklabels(piv.columns, fontproperties=CN_FONT)
-ax.set_yticks(range(piv.shape[0]))
-ax.set_yticklabels([int(x) for x in piv.index], fontproperties=CN_FONT)
+            ax.text(
+                j, i,
+                f'{v:.2f}\n(n={int(n)})',
+                ha='center', va='center',
+                color=color, fontsize=8.5,
+                fontproperties=CN_FONT
+            )
+
+ax.set_xticks(range(piv_rate.shape[1]))
+ax.set_xticklabels(piv_rate.columns, fontproperties=CN_FONT)
+ax.set_yticks(range(piv_rate.shape[0]))
+ax.set_yticklabels([int(x) for x in piv_rate.index], fontproperties=CN_FONT)
 ax.set_xlabel('痰湿积分分段', fontproperties=CN_FONT)
 ax.set_ylabel('血脂异常项数', fontproperties=CN_FONT)
-ax.set_title('(a) 痰湿积分与血脂异常的联合热力图', fontproperties=CN_FONT)
+ax.set_title('(a) 痰湿积分与血脂异常联合发病率', fontproperties=CN_FONT)
 for spine in ax.spines.values():
     spine.set_linewidth(0.8)
-cbar = plt.colorbar(im, ax=ax, fraction=0.045, pad=0.03, label='发病率')
-cbar.ax.yaxis.label.set_fontproperties(CN_FONT)
+cbar = plt.colorbar(im, ax=ax, fraction=0.045, pad=0.03)
+cbar.ax.set_ylabel('发病率', fontproperties=CN_FONT)
 for t in cbar.ax.get_yticklabels():
     t.set_fontproperties(CN_FONT)
 apply_chinese_to_ax(ax)
 
-# (b) 痰湿体质患者风险占比
+# (b) 痰湿体质患者风险结构（改为环形图）
 ax = axes[0, 1]
 if COL['TYPE'] is not None:
-    ts_sub = df[df[COL['TYPE']] == 5]
+    ts_sub = df[df[COL['TYPE']] == 5].copy()
     prop = ts_sub['风险分层'].value_counts(normalize=True).reindex(['低风险', '中风险', '高风险']).fillna(0)
+    cnts = ts_sub['风险分层'].value_counts().reindex(['低风险', '中风险', '高风险']).fillna(0).astype(int)
+
     wedges, texts, autotexts = ax.pie(
         prop.values,
         labels=prop.index,
         autopct='%1.1f%%',
         startangle=90,
         colors=COLORS_3,
-        wedgeprops={'edgecolor': 'white', 'linewidth': 1.0},
+        pctdistance=0.78,
+        wedgeprops={'width': 0.42, 'edgecolor': 'white', 'linewidth': 1.2},
         textprops={'fontsize': 10}
     )
     for txt in texts:
         txt.set_fontproperties(CN_FONT)
     for at in autotexts:
-        at.set_color('white')
-        at.set_fontweight('bold')
         at.set_fontproperties(CN_FONT)
-    ax.set_title(f'(b) 痰湿体质患者风险结构（n={len(ts_sub)}）', fontproperties=CN_FONT)
-else:
-    ax.axis('off')
+        at.set_fontweight('bold')
+        at.set_color('black')
 
-# (c) 痰湿体质子样本决策树
-ax = axes[1, 0]
-if COL['TYPE'] is not None:
-    ts_sub = df[df[COL['TYPE']] == 5].copy()
-    tree_feats = [COL['TANSHI'], COL['BMI'], COL['GLU'], COL['UA'], COL['ACT'], COL['AGEGRP']]
-    tree_feats = [c for c in tree_feats if c is not None]
-    Xt = ts_sub[tree_feats].fillna(ts_sub[tree_feats].median())
-    yt = (ts_sub['风险分层'] == '高风险').astype(int)
+    ax.text(
+        0, 0,
+        f'痰湿体质\nn={len(ts_sub)}',
+        ha='center', va='center',
+        fontsize=11, fontweight='bold',
+        fontproperties=CN_FONT
+    )
+    ax.set_title('(b) 痰湿体质患者风险分层结构', fontproperties=CN_FONT)
 
-    if yt.sum() >= 10 and (1 - yt).sum() >= 10:
-        dt = DecisionTreeClassifier(
-            max_depth=3,
-            min_samples_leaf=15,
-            class_weight='balanced',
-            random_state=42
-        ).fit(Xt, yt)
-        plot_tree(
-            dt,
-            feature_names=[str(f)[:8] for f in tree_feats],
-            class_names=['非高风险', '高风险'],
-            filled=True,
-            rounded=True,
-            fontsize=7,
-            ax=ax,
-            precision=2
+    # 补充样本数说明
+    y0 = -1.25
+    for i, (lv, c, n) in enumerate(zip(prop.index, COLORS_3, cnts.values)):
+        ax.text(
+            1.35, y0 + i * 0.18,
+            f'■ {lv}: {n}例',
+            color=c, fontsize=9.5,
+            fontproperties=CN_FONT
         )
-        # 强制树图中的所有文本使用中文字体
-        for txt in ax.texts:
-            txt.set_fontproperties(CN_FONT)
-        ax.set_title('(c) 痰湿体质高风险判别树', fontproperties=CN_FONT)
-    else:
-        ax.axis('off')
 else:
     ax.axis('off')
 
-# (d) 痰湿相关特征重要性
+# (c) 痰湿 × 活动能力 对高风险率影响
+ax = axes[1, 0]
+grp = df.groupby(['_痰湿分段', '_活动分段'], observed=True).agg(
+    高风险率=('风险分层', lambda x: np.mean(x == '高风险')),
+    样本数=(COL['TARGET'], 'size')
+).reset_index()
+
+activity_order = ['低活动(<40)', '中活动(40–60)', '高活动(≥60)']
+x = np.arange(len(df['_痰湿分段'].cat.categories))
+bar_w = 0.22
+
+for k, act_label in enumerate(activity_order):
+    sub = grp[grp['_活动分段'] == act_label].set_index('_痰湿分段').reindex(df['_痰湿分段'].cat.categories)
+    vals = sub['高风险率'].fillna(0).values
+    bars = ax.bar(
+        x + (k - 1) * bar_w,
+        vals,
+        width=bar_w,
+        label=act_label,
+        color=COLORS_3[k],
+        alpha=0.88,
+        edgecolor='black'
+    )
+    for b, v in zip(bars, vals):
+        if v > 0:
+            ax.text(
+                b.get_x() + b.get_width()/2,
+                v + 0.015,
+                f'{v:.2f}',
+                ha='center', va='bottom',
+                fontsize=8,
+                fontproperties=CN_FONT
+            )
+
+ax.set_xticks(x)
+ax.set_xticklabels(df['_痰湿分段'].cat.categories, fontproperties=CN_FONT)
+ax.set_xlabel('痰湿积分分段', fontproperties=CN_FONT)
+ax.set_ylabel('高风险占比', fontproperties=CN_FONT)
+ax.set_title('(c) 痰湿积分与活动能力对高风险率的影响', fontproperties=CN_FONT)
+ax.legend(frameon=True, prop=CN_FONT, loc='upper left')
+beautify_ax(ax)
+
+# (d) 痰湿相关变量及交互项重要性（美化）
 ax = axes[1, 1]
 inter_feats = imp_df[imp_df['特征'].isin(
     ['痰湿×活动', '痰湿×BMI', '痰湿×尿酸', COL['TANSHI'], COL['ACT'], COL['BMI'], COL['UA']]
-)]
+)].copy()
+
 if len(inter_feats) > 0:
     inter_feats = inter_feats.sort_values(imp_name, ascending=True)
+    y_pos = np.arange(len(inter_feats))
     bars = ax.barh(
-        inter_feats['特征'],
+        y_pos,
         inter_feats[imp_name],
-        color=C_ACC,
-        alpha=0.85,
+        color='#8172B2',
+        alpha=0.88,
         edgecolor='black'
     )
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(inter_feats['特征'], fontproperties=CN_FONT)
+
+    vmax = inter_feats[imp_name].max()
     for i, v in enumerate(inter_feats[imp_name]):
-        ax.text(v + 0.0015, i, f'{v:.3f}', va='center', fontsize=8.5,
-                fontproperties=CN_FONT)
+        ax.text(
+            v + vmax * 0.03,
+            i,
+            f'{v:.3f}',
+            va='center',
+            fontsize=8.5,
+            fontproperties=CN_FONT
+        )
+
     ax.set_xlabel(imp_name, fontproperties=CN_FONT)
     ax.set_title('(d) 痰湿相关变量及交互项重要性', fontproperties=CN_FONT)
     beautify_ax(ax)
@@ -1044,6 +1111,52 @@ else:
 fig.suptitle('问题2 痰湿体质高风险特征组合分析', fontsize=14, fontweight='bold', y=0.98, fontproperties=CN_FONT)
 save_fig(fig, os.path.join(FIG_DIR, 'p2_final_03_tanshi_analysis.png'))
 print('✓ 保存图: p2_final_03_tanshi_analysis.png')
+
+# -------------------------
+# 图4：决策树完整展开（单独成图）
+# -------------------------
+if COL['TYPE'] is not None:
+    ts_sub = df[df[COL['TYPE']] == 5].copy()
+    tree_feats = [COL['TANSHI'], COL['BMI'], COL['GLU'], COL['UA'], COL['ACT'], COL['AGEGRP']]
+    tree_feats = [c for c in tree_feats if c is not None]
+
+    Xt = ts_sub[tree_feats].fillna(ts_sub[tree_feats].median())
+    yt = (ts_sub['风险分层'] == '高风险').astype(int)
+
+    if yt.sum() >= 10 and (1 - yt).sum() >= 10:
+        # 单独图中可适当放宽深度，完整展开
+        dt = DecisionTreeClassifier(
+            max_depth=4,
+            min_samples_leaf=12,
+            class_weight='balanced',
+            random_state=42
+        ).fit(Xt, yt)
+
+        fig, ax = plt.subplots(figsize=(14, 7))
+        plot_tree(
+            dt,
+            feature_names=tree_feats,
+            class_names=['非高风险', '高风险'],
+            filled=True,
+            rounded=True,
+            fontsize=12,
+            ax=ax,
+            precision=2,
+            impurity=False,
+            proportion=True
+        )
+
+        for txt in ax.texts:
+            txt.set_fontproperties(CN_FONT)
+
+        ax.set_title('图4 痰湿体质高风险判别树', fontsize=14, fontweight='bold', fontproperties=CN_FONT)
+        fig.tight_layout()
+        fig.savefig(
+            os.path.join(FIG_DIR, 'p2_final_04_tanshi_tree_full.png'),
+            dpi=300, bbox_inches='tight', facecolor='white'
+        )
+        plt.close(fig)
+        print('✓ 保存图: p2_final_04_tanshi_tree_full.png')
 
 # =========================
 # 15. 最终汇总
